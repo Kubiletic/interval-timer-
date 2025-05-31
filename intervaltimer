@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dark Digital Interval Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif; /* Fallback font */
+            font-family: 'DS-Digital', 'Digital-7 Mono', 'Orbitron', 'Monaco', 'Lucida Console', 'Courier New', monospace;
+        }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield; /* Firefox */
+        }
+        .spinner {
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border-top-color: #34d399; /* green-400 */
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        #digitalTime {
+            font-weight: 900;
+            text-shadow: 0 0 3px rgba(52, 211, 153, 0.5); /* Default green glow */
+        }
+        .phase-text {
+            text-shadow: 0 0 5px currentColor; /* Glow effect based on current text color */
+        }
+    </style>
+</head>
+<body class="bg-black text-slate-300 flex flex-col items-center justify-center min-h-screen p-4 selection:bg-green-500 selection:text-black">
+
+    <div class="bg-slate-900 p-4 sm:p-6 rounded-xl shadow-2xl shadow-green-900/30 w-full max-w-md border border-slate-700">
+        <h1 class="text-3xl font-bold text-center text-green-400 mb-4" style="font-family: 'Orbitron', 'DS-Digital', sans-serif;">INTERVAL TIMER</h1>
+
+        <div id="phaseDisplay" class="text-center text-2xl font-semibold mb-3 h-8 phase-text">
+            </div>
+
+        <div class="relative w-full mx-auto mb-6 py-4 bg-black rounded-lg border-2 border-slate-700 shadow-inner shadow-slate-950">
+            <div id="digitalTime" class="flex items-center justify-center text-7xl sm:text-8xl text-green-400">
+                00:00
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-x-4 gap-y-3 mb-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Work Time</label>
+                <div class="flex space-x-2">
+                    <input type="number" id="workMinutes" placeholder="M" value="0" class="w-1/2 p-2 text-center bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:ring-green-500 focus:border-green-500">
+                    <input type="number" id="workSeconds" placeholder="S" value="30" class="w-1/2 p-2 text-center bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:ring-green-500 focus:border-green-500">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Rest Time</label>
+                <div class="flex space-x-2">
+                    <input type="number" id="restMinutes" placeholder="M" value="0" class="w-1/2 p-2 text-center bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:ring-sky-500 focus:border-sky-500">
+                    <input type="number" id="restSeconds" placeholder="S" value="15" class="w-1/2 p-2 text-center bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:ring-sky-500 focus:border-sky-500">
+                </div>
+            </div>
+            <div class="col-span-2">
+                <label for="rounds" class="block text-xs font-medium text-slate-400 mb-1">Rounds</label>
+                <input type="number" id="rounds" value="5" min="1" class="w-full p-2 text-center bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:ring-green-500 focus:border-green-500">
+            </div>
+        </div>
+
+
+        <div class="grid grid-cols-2 gap-4 mb-3">
+            <button id="startPauseButton"
+                    class="w-full col-span-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md shadow-green-900/50">
+                Start
+            </button>
+            <button id="resetButton"
+                    class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-3 px-4 rounded-lg shadow-md shadow-slate-900/50">
+                Reset
+            </button>
+             <button id="suggestWorkoutButton"
+                    class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md shadow-teal-900/50 flex items-center justify-center">
+                ✨ Suggest
+                <span id="suggestLoadingSpinner" class="spinner hidden ml-2"></span>
+            </button>
+        </div>
+         <div id="messageArea" class="text-center text-green-400 font-semibold mt-1 h-auto min-h-[20px] break-words text-sm"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements
+            const digitalTimeDisplay = document.getElementById('digitalTime');
+            const phaseDisplay = document.getElementById('phaseDisplay');
+            
+            const workMinutesInput = document.getElementById('workMinutes');
+            const workSecondsInput = document.getElementById('workSeconds');
+            const restMinutesInput = document.getElementById('restMinutes');
+            const restSecondsInput = document.getElementById('restSeconds');
+            const roundsInput = document.getElementById('rounds');
+
+            const startPauseButton = document.getElementById('startPauseButton');
+            const resetButton = document.getElementById('resetButton');
+            const suggestWorkoutButton = document.getElementById('suggestWorkoutButton');
+            const suggestLoadingSpinner = document.getElementById('suggestLoadingSpinner');
+            const messageArea = document.getElementById('messageArea');
+
+            // Timer State
+            let workDuration = 0;
+            let restDuration = 0;
+            let totalRounds = 0;
+            
+            let currentRound = 1;
+            let currentPhase = 'idle'; // 'idle', 'prepare', 'work', 'rest', 'finished'
+            let remainingSecondsInPhase = 0;
+            // totalSecondsInPhase is no longer needed for circular timer percentage
+
+            let timerIntervalId = null;
+            let isRunning = false; // Overall timer system is active
+            let isPaused = false; // Timer system is paused
+            let isSuggestingWorkout = false;
+
+            const PREPARE_DURATION = 5; // 5 seconds countdown
+
+            // Colors
+            const colorWork = '#34d399'; // green-400
+            const colorRest = '#38bdf8'; // sky-400
+            const colorPrepare = '#6ee7b7'; // green-300 (lighter green)
+            const colorWarningAmber = '#f59e0b'; // amber-500
+            const colorWarningRed = '#ef4444'; // red-500
+            // colorTrack is no longer needed
+
+            const GEMINI_API_KEY = ""; 
+            const GEMINI_API_URL_GENERATE_CONTENT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+            function updateDurationsAndRounds() {
+                workDuration = (parseInt(workMinutesInput.value) || 0) * 60 + (parseInt(workSecondsInput.value) || 0);
+                restDuration = (parseInt(restMinutesInput.value) || 0) * 60 + (parseInt(restSecondsInput.value) || 0);
+                totalRounds = parseInt(roundsInput.value) || 1;
+                if (!isRunning && !isPaused) { 
+                    displayInitialMessage();
+                }
+            }
+            
+            function displayInitialMessage() {
+                 if (workDuration > 0) {
+                    phaseDisplay.textContent = `Get Ready: ${totalRounds} Round${totalRounds > 1 ? 's' : ''}`;
+                    digitalTimeDisplay.textContent = formatTime(workDuration); 
+                    digitalTimeDisplay.style.color = colorWork;
+                    digitalTimeDisplay.style.textShadow = `0 0 3px ${colorWork}`;
+                    phaseDisplay.style.color = colorWork;
+                 } else {
+                    phaseDisplay.textContent = "Set Work Time";
+                    digitalTimeDisplay.textContent = "00:00";
+                    digitalTimeDisplay.style.color = colorWork;
+                    digitalTimeDisplay.style.textShadow = `0 0 3px ${colorWork}`;
+                    phaseDisplay.style.color = colorWork;
+                 }
+                 remainingSecondsInPhase = workDuration;
+                 // No drawCircularTimer() call needed
+            }
+
+
+            function startNextPhase() {
+                if (currentPhase === 'prepare') {
+                    currentPhase = 'work';
+                    remainingSecondsInPhase = workDuration;
+                } else if (currentPhase === 'work') {
+                    if (restDuration > 0 && currentRound <= totalRounds) { 
+                        currentPhase = 'rest';
+                        remainingSecondsInPhase = restDuration;
+                    } else { 
+                        currentRound++;
+                        if (currentRound <= totalRounds) {
+                            currentPhase = 'work';
+                            remainingSecondsInPhase = workDuration;
+                        } else {
+                            currentPhase = 'finished';
+                        }
+                    }
+                } else if (currentPhase === 'rest') {
+                    currentRound++;
+                    if (currentRound <= totalRounds) {
+                        currentPhase = 'work';
+                        remainingSecondsInPhase = workDuration;
+                    } else {
+                        currentPhase = 'finished';
+                    }
+                }
+                updatePhaseDisplayAndColor();
+            }
+
+            function startTimer() {
+                if (isRunning && !isPaused) return; 
+
+                if (!isPaused) { 
+                    updateDurationsAndRounds();
+                    if (workDuration <= 0) {
+                        showMessage("Work duration must be > 0.");
+                        return;
+                    }
+                    currentRound = 1;
+                    currentPhase = 'prepare';
+                    remainingSecondsInPhase = PREPARE_DURATION;
+                }
+                
+                showMessage("");
+                isRunning = true;
+                isPaused = false;
+                startPauseButton.textContent = 'Pause';
+                startPauseButton.classList.remove('bg-green-600', 'hover:bg-green-700');
+                startPauseButton.classList.add('bg-amber-500', 'hover:bg-amber-600');
+                disableInputs(true);
+                suggestWorkoutButton.disabled = true;
+                
+                updatePhaseDisplayAndColor();
+                tick(); 
+                timerIntervalId = setInterval(tick, 1000);
+            }
+
+            function pauseTimer() {
+                if (!isRunning) return;
+                clearInterval(timerIntervalId);
+                isPaused = true; 
+                startPauseButton.textContent = 'Resume';
+                startPauseButton.classList.remove('bg-amber-500', 'hover:bg-amber-600');
+                startPauseButton.classList.add('bg-green-600', 'hover:bg-green-700');
+            }
+
+            function resetTimer() {
+                clearInterval(timerIntervalId);
+                isRunning = false;
+                isPaused = false;
+                currentPhase = 'idle';
+                currentRound = 1;
+                updateDurationsAndRounds(); 
+                startPauseButton.textContent = 'Start';
+                startPauseButton.classList.remove('bg-amber-500', 'hover:bg-amber-600');
+                startPauseButton.classList.add('bg-green-600', 'hover:bg-green-700');
+                disableInputs(false);
+                suggestWorkoutButton.disabled = false;
+                showMessage("");
+            }
+
+            async function tick() {
+                if (remainingSecondsInPhase > 0) {
+                    remainingSecondsInPhase--;
+                } else {
+                    startNextPhase(); 
+                    if (currentPhase === 'finished') {
+                        clearInterval(timerIntervalId);
+                        isRunning = false;
+                        disableInputs(false);
+                        suggestWorkoutButton.disabled = false;
+                        startPauseButton.textContent = 'Start';
+                        startPauseButton.classList.remove('bg-amber-500', 'hover:bg-amber-600');
+                        startPauseButton.classList.add('bg-green-600', 'hover:bg-green-700');
+                        phaseDisplay.textContent = "ALL ROUNDS COMPLETE!";
+                        phaseDisplay.style.color = colorWork; 
+                        await getMotivationalQuote();
+                        return; 
+                    }
+                }
+                updateDigitalDisplay();
+                updatePhaseDisplayAndColor(); // Update colors based on remaining time
+            }
+            
+            function formatTime(seconds) {
+                const displayMinutes = Math.floor(seconds / 60);
+                const displaySeconds = seconds % 60;
+                return `${String(displayMinutes).padStart(2, '0')}:${String(displaySeconds).padStart(2, '0')}`;
+            }
+
+            function updateDigitalDisplay() {
+                digitalTimeDisplay.textContent = formatTime(remainingSecondsInPhase);
+            }
+
+            function updatePhaseDisplayAndColor() {
+                let phaseText = "";
+                let currentDisplayColor = colorWork; // Default color for digitalTime and phaseDisplay
+                let digitalGlow = `0 0 3px ${colorWork}`;
+
+                switch (currentPhase) {
+                    case 'prepare':
+                        phaseText = `PREPARE (${PREPARE_DURATION}s)`;
+                        currentDisplayColor = colorPrepare;
+                        break;
+                    case 'work':
+                        phaseText = `ROUND ${currentRound}/${totalRounds} - WORK`;
+                        currentDisplayColor = colorWork;
+                        break;
+                    case 'rest':
+                        phaseText = `ROUND ${currentRound}/${totalRounds} - REST`;
+                        currentDisplayColor = colorRest;
+                        break;
+                    case 'idle':
+                         displayInitialMessage(); 
+                         return; 
+                    case 'finished':
+                        phaseText = "ALL ROUNDS COMPLETE!";
+                        currentDisplayColor = colorWork; 
+                        break;
+                }
+
+                // Warning colors override phase colors for digital display
+                if (remainingSecondsInPhase <= 5 && (currentPhase === 'work' || currentPhase === 'rest' || currentPhase === 'prepare')) {
+                    currentDisplayColor = colorWarningRed;
+                } else if (remainingSecondsInPhase <= 10 && (currentPhase === 'work' || currentPhase === 'rest' || currentPhase === 'prepare')) {
+                    currentDisplayColor = colorWarningAmber;
+                }
+                
+                digitalGlow = `0 0 3px ${currentDisplayColor}`;
+
+                phaseDisplay.textContent = phaseText;
+                phaseDisplay.style.color = currentDisplayColor; // Phase text also gets warning color
+                // phaseDisplay.classList.add('phase-text'); // Already added in HTML, but good to remember
+
+                digitalTimeDisplay.style.color = currentDisplayColor;
+                digitalTimeDisplay.style.textShadow = digitalGlow;
+            }
+            
+            function disableInputs(disabled) {
+                workMinutesInput.disabled = disabled;
+                workSecondsInput.disabled = disabled;
+                restMinutesInput.disabled = disabled;
+                restSecondsInput.disabled = disabled;
+                roundsInput.disabled = disabled;
+            }
+
+            function showMessage(msg, isLoading = false) {
+                messageArea.textContent = msg;
+                suggestLoadingSpinner.classList.toggle('hidden', !isLoading);
+            }
+
+            async function callGeminiAPI(prompt) {
+                const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+                try {
+                    const response = await fetch(GEMINI_API_URL_GENERATE_CONTENT, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+                    const result = await response.json();
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || null;
+                } catch (error) { console.error("Gemini API Error:", error); return null; }
+            }
+
+            async function suggestWorkout() {
+                if (isSuggestingWorkout || isRunning) return;
+                isSuggestingWorkout = true; suggestWorkoutButton.disabled = true; showMessage("✨ Thinking...", true);
+                updateDurationsAndRounds();
+                const prompt = `Suggest a concise HIIT exercise or a short interval workout structure suitable for work periods of around ${workDuration} seconds and rest periods of ${restDuration} seconds, for ${totalRounds} rounds. Keep it under 25 words.`;
+                const suggestion = await callGeminiAPI(prompt);
+                showMessage(suggestion ? `✨ Suggestion: ${suggestion}` : "Sorry, no suggestion now.");
+                isSuggestingWorkout = false; suggestWorkoutButton.disabled = isRunning;
+            }
+
+            async function getMotivationalQuote() {
+                showMessage("✨ Getting motivation...", true);
+                const prompt = "Give me a short, inspiring fitness quote (max 15 words).";
+                const quote = await callGeminiAPI(prompt);
+                showMessage(quote ? `🎉 ${quote}` : "Keep pushing!");
+            }
+
+            // Event Listeners
+            startPauseButton.addEventListener('click', () => {
+                if (isRunning && !isPaused) pauseTimer();
+                else startTimer();
+            });
+            resetButton.addEventListener('click', resetTimer);
+            suggestWorkoutButton.addEventListener('click', suggestWorkout);
+            
+            [workMinutesInput, workSecondsInput, restMinutesInput, restSecondsInput, roundsInput].forEach(input => {
+                input.addEventListener('input', () => {
+                    if (!isRunning && !isPaused) { 
+                        updateDurationsAndRounds();
+                    }
+                });
+            });
+
+            // Initial Setup
+            updateDurationsAndRounds(); 
+        });
+    </script>
+
+</body>
+</html>
